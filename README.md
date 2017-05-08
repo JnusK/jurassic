@@ -1,2 +1,2 @@
-# jurassic
+# JuraSSiC
 Autonomous evasive robot
