@@ -1,15 +1,20 @@
 #define LEDPin 13
 int photoTran = A16;
 int reading = 0;
-int trigUSF = 8;
-int echoUSF = 7;
-int trigUSB = 9;
-int echoUSB = 10;
+int echoUSF = 16;
+int trigUSF = 17;
+int echoUSB = 18;
+int trigUSB = 19;
+int echoUSR = 20;
+int trigUSR = 21;
+int echoUSL = 22;
+int trigUSL = 23;
+
 
 int pwmPinL = 2;
 int pwmPinR = 3;
-int dirPinL = 11;
-int dirPinR = 12;
+int dirPinL = 27;
+int dirPinR = 28;
 int coastPinR = 24;
 int coastPinL = 25;
 int coastTrigger = 26;
@@ -19,34 +24,16 @@ bool dirForward = true;
 float wheelSpeed = 255;
 int i;
 
-int ultrasoundF(){
-  long duration, distance;
-  digitalWrite(trigUSF, LOW);
-  delayMicroseconds(2);
-  digitalWrite(trigUSF,HIGH);
-  delayMicroseconds(10);
-  digitalWrite(trigUSF,LOW);
-  digitalWrite(LEDPin, HIGH);
-  duration = pulseIn(echoUSF, HIGH);
-  distance = (duration/2)/29.1;
-  //distance = (duration/2)/58;
-  if (duration != 0){
-    digitalWrite(LEDPin, LOW);
-  }
-  Serial.println(distance);
-  return distance;
-}
 
-int ultrasoundB(){
+int ultrasound(int echo, int trig){
   long duration, distance;
-
-  digitalWrite(trigUSB, LOW);
+  digitalWrite(trig, LOW);
   delayMicroseconds(2);
-  digitalWrite(trigUSB,HIGH);
+  digitalWrite(trig,HIGH);
   delayMicroseconds(10);
-  digitalWrite(trigUSB, LOW);
+  digitalWrite(trig,LOW);
   digitalWrite(LEDPin, HIGH);
-  duration = pulseIn(echoUSB, HIGH);
+  duration = pulseIn(echo, HIGH);
   distance = (duration/2)/29.1;
   //distance = (duration/2)/58;
   if (duration != 0){
@@ -63,12 +50,18 @@ int phototrans(){
 
 //int LED = 25;
 void setup(){
-  pinMode(photoTran,INPUT);
-  pinMode (trigUSF, OUTPUT);
+  pinMode (photoTran,INPUT);
   pinMode (echoUSF, INPUT);
-  pinMode(LEDPin, OUTPUT);
-  pinMode (trigUSB, OUTPUT);
+  pinMode (trigUSF, OUTPUT);
   pinMode (echoUSB, INPUT);
+  pinMode (trigUSB, OUTPUT);
+  pinMode (echoUSR, INPUT);
+  pinMode (trigUSR, OUTPUT);
+  pinMode (echoUSL, INPUT);
+  pinMode (trigUSL, OUTPUT);
+  pinMode (LEDPin, OUTPUT);
+  
+  
   
   pinMode(pwmPinL, OUTPUT);
   pinMode(pwmPinR, OUTPUT);
@@ -80,7 +73,7 @@ void setup(){
   
   Serial.begin(9600);
 }
-
+/*
 void loop(){
   if (digitalRead(coastTrigger)) {
     if (coastP) {
@@ -119,7 +112,7 @@ void loop(){
   }
   delay(100);
 }
-
+*/
 int slowDown() {
   if (wheelSpeed != 0) {
     return wheelSpeed - 7;
@@ -188,5 +181,9 @@ void setSpd(float val) {
   wheelSpeed = val;
 }
 
+void loop(){
+  //Serial.println(ultrasound(17,18));
+  Serial.println(ultrasound(echoUSF,trigUSF));
+}
 
 
