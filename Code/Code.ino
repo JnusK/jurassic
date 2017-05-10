@@ -1,15 +1,21 @@
 #define LEDPin 13
 int photoTran = 35; //A16
 int reading = 0;
-int trigUSF = 8;
-int echoUSF = 7;
-int trigUSB = 9;
-int echoUSB = 10;
+int echoUSF = 16;
+int trigUSF = 17;
+int echoUSB = 18;
+int trigUSB = 19;
+int echoUSR = 20;
+int trigUSR = 21;
+int echoUSL = 22;
+int trigUSL = 23;
+
+int lR = -1;
 
 int pwmPinL = 2;
 int pwmPinR = 3;
-int dirPinL = 11;
-int dirPinR = 12;
+int dirPinL = 27;
+int dirPinR = 28;
 int coastPinR = 24;
 int coastPinL = 25;
 int coastTrigger = 26;
@@ -20,40 +26,23 @@ bool dirForward = true;
 float wheelSpeed = 255;
 int i;
 
-int lastDist;
-int lastChange;
+int lastDist = -1;
+int lastChange = -1;
+int prevDistF = -1;
+int currDistF, currDistB, currDistR, currDistL = 0;
 
-int ultrasoundF(){
+int ultrasound(int echo, int trig){
   long duration, distance;
-  digitalWrite(trigUSF, LOW);
+  digitalWrite(trig, LOW);
   delayMicroseconds(2);
-  digitalWrite(trigUSF,HIGH);
+  digitalWrite(trig,HIGH);
   delayMicroseconds(10);
-  digitalWrite(trigUSF,LOW);
+  digitalWrite(trig,LOW);
   digitalWrite(LEDPin, HIGH);
-  duration = pulseIn(echoUSF, HIGH);
+  duration = pulseIn(echo, HIGH);
   distance = (duration/2)/29.1;
   //distance = (duration/2)/58;
-  if (duration != 0){
-    digitalWrite(LEDPin, LOW);
-  }
-  Serial.println(distance);
-  return distance;
-}
-
-int ultrasoundB(){
-  long duration, distance;
-
-  digitalWrite(trigUSB, LOW);
-  delayMicroseconds(2);
-  digitalWrite(trigUSB,HIGH);
-  delayMicroseconds(10);
-  digitalWrite(trigUSB, LOW);
-  digitalWrite(LEDPin, HIGH);
-  duration = pulseIn(echoUSB, HIGH);
-  distance = (duration/2)/29.1;
-  //distance = (duration/2)/58;
-  if (duration != 0){
+  if (duration != 0 && distance < 10){
     digitalWrite(LEDPin, LOW);
   }
   Serial.println(distance);
@@ -67,12 +56,16 @@ int phototrans(){
 
 //int LED = 25;
 void setup(){
-  pinMode(photoTran,INPUT);
-  pinMode (trigUSF, OUTPUT);
+  pinMode (photoTran,INPUT);
   pinMode (echoUSF, INPUT);
-  pinMode(LEDPin, OUTPUT);
-  pinMode (trigUSB, OUTPUT);
+  pinMode (trigUSF, OUTPUT);
   pinMode (echoUSB, INPUT);
+  pinMode (trigUSB, OUTPUT);
+  pinMode (echoUSR, INPUT);
+  pinMode (trigUSR, OUTPUT);
+  pinMode (echoUSL, INPUT);
+  pinMode (trigUSL, OUTPUT);
+  pinMode (LEDPin, OUTPUT);
   
   pinMode(pwmPinL, OUTPUT);
   pinMode(pwmPinR, OUTPUT);
@@ -81,7 +74,7 @@ void setup(){
   pinMode(coastPinR, OUTPUT);
   pinMode(coastPinL, OUTPUT);
   pinMode(coastTrigger, INPUT);
-  
+  randomSeed(analogRead(0));
   Serial.begin(9600);
 }
 
@@ -97,40 +90,56 @@ void loop(){
     }
     delay(100);
   }
-  accelerate(dirForward);
-  if (ultrasoundF() < 10 && ultrasoundF() != 0){
+  
+  currDistF = ultrasound(echoUSF, trigUSF);
+  currDistB = ultrasound(echoUSB, trigUSB);
+  currDistR = ultrasound(echoUSR, trigUSR);
+  currDistL = ultrasound(echoUSL, trigUSL);
+  if (currDistF > 1000 || currDistR > 1000 || currDistL > 1000 || currDistB > 1000) {return;}
+  if (currDistF < 15 && currDistF != 0){
     if (wheelSpeed == 0) {
-      dirForward = false;
-      for (i=0; i<5; i++) {
-        aboutTurnR();
-      }
-      for (i=0; i<10; i++) {
-        accelerate(dirForward);
+      if (currDistR < 15 && currDistR != 0) {
+        while (!differentiate('R', false)){
+          aboutTurnL();
+        }
+      } else if (currDistL < 15 && currDistL !=0) {
+        while (!differentiate('L', false)){
+          aboutTurnR();
+        }
+      } else {
+        lR = random(300) % 2;
+        if (lR == 0) {
+          aboutTurnL();
+        } else {
+          aboutTurnR();
+        }
+        delay (500/3 );
       }
     } else {
-      wheelSpeed = slowDown();
+      wheelSpeed = slowDown(dirForward);
     }
-  }
-  if (ultrasoundB() < 10 && ultrasoundB() != 0){
-    if (wheelSpeed == 0) {
-      dirForward = true;
-      for (i=0; i<10; i++) {
-        aboutTurn('l');
-      }
-    } else {
-      wheelSpeed = slowDown();
-    }
+  } else {
+    accelerate(dirForward);
   }
   delay(100);
 }
 
-int slowDown() {
-  if (wheelSpeed != 0) {
-    return wheelSpeed - 7;
+int slowDown(bool dirForward) {
+  if (wheelSpeed > 0) {
+    int newSpeed = wheelSpeed - 50;
+    if (newSpeed <= 10) {
+      moveWheel(0, dirForward);
+      newSpeed = 0;
+    } else {
+      moveWheel(newSpeed , dirForward);
+    }
+    return newSpeed;
+  } else {
+    return 0;
   }
 }
 void accelerate(bool forward) {
-  if (wheelSpeed != 255 ) {
+  if (wheelSpeed < 255 ) {
    wheelSpeed = wheelSpeed + 7;   
   }
   moveWheel(wheelSpeed, forward);
@@ -156,12 +165,12 @@ void moveForward (float val) {
 
 void moveForwardR (float val) {
   analogWrite(pwmPinR, val);
-  digitalWrite(dirPinR, LOW);
+  digitalWrite(dirPinR, HIGH);
 }
 
 void moveForwardL (float val) {
   analogWrite(pwmPinL, val);
-  digitalWrite(dirPinL, HIGH);
+  digitalWrite(dirPinL, LOW);
 }
 
 void stopMove() {
@@ -173,12 +182,12 @@ void stopMove() {
 
 void reverseL (float val) {
   analogWrite(pwmPinL, val);
-  digitalWrite(dirPinL, LOW);
+  digitalWrite(dirPinL, HIGH);
 }
 
 void reverseR (float val) {
   analogWrite(pwmPinR, val);
-  digitalWrite(dirPinR, HIGH);
+  digitalWrite(dirPinR, LOW);
 }
 
 void reverse(float val) {
@@ -192,59 +201,51 @@ void setSpd(float val) {
   wheelSpeed = val;
 }
 
-//bool differentiate (char side, bool maximum){
-//  switch (side) {
-//    case 'r':
-//    case 'R':
-//      {
-//        if (lastDist == null) {
-//          lastDist = ultrasoundR();
-//        } else if (lastChange == null ) {
-//          lastChange = ultrasoundR() - lastDist;
-//        } else {
-//          if (maximum) {
-//            return ((ultrasoundR() - lastDist) <= 0 && lastChange >= 0);
-//          } else {
-//            return ((ultrasoundR() - lastDist) >=0 && lastChange <= 0);
-//          }
-//        }
-//      }
-//      break;
-//    case 'l':
-//    case 'L' :
-//      {
-//        if (lastDist == null) {
-//          lastDist = ultrasoundL();
-//        } else if (lastChange == null ) {
-//          lastChange = ultrasoundL() - lastDist;
-//        } else {
-//          if (maximum) {
-//            return ((ultrasoundL() - lastDist) <= 0 && lastChange >= 0);
-//          } else {
-//            return ((ultrasoundL() - lastDist) >=0 && lastChange <= 0);
-//          }
-//        }
-//      }
-//      break;
-//    default: 
-//    break;
-//  } 
-//}
-
-void aboutTurn(char side) {
+bool differentiate (char side, bool maximum){
   switch (side) {
-    case 'l':
-    case 'L':
-      moveForwardR(130);
-      reverseL(130);
-    break;
     case 'r':
-    case'R':
-      moveForwardL(130);
-      reverseR(130);
-    break;
+    case 'R':
+      {
+        if (lastDist == -1) {
+          lastDist = ultrasound(echoUSR, trigUSR);
+        } else if (lastChange == -1 ) {
+          lastChange = ultrasound(echoUSR, trigUSR) - lastDist;
+        } else {
+          if (maximum) {
+            return ((ultrasound(echoUSR, trigUSR) - lastDist) <= 0 && lastChange >= 0);
+          } else {
+            return ((ultrasound(echoUSR, trigUSR) - lastDist) >=0 && lastChange <= 0);
+          }
+        }
+      }
+      break;
+    case 'l':
+    case 'L' :
+      {
+        if (lastDist == -1) {
+          lastDist = ultrasound(echoUSL, trigUSL);
+        } else if (lastChange == -1 ) {
+          lastChange = ultrasound(echoUSL, trigUSL) - lastDist;
+        } else {
+          if (maximum) {
+            return ((ultrasound(echoUSL, trigUSL) - lastDist) <= 0 && lastChange >= 0);
+          } else {
+            return ((ultrasound(echoUSL, trigUSL) - lastDist) >=0 && lastChange <= 0);
+          }
+        }
+      }
+      break;
     default: 
     break;
-  }
+ } 
 }
+
+void aboutTurnL() {
+    moveForwardR(255);
+    reverseL(255);
+} 
+  
+//void loop(){
+//  Serial.println(ultrasound(echoUSF,trigUSF));
+//}
 
