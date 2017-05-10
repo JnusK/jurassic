@@ -1,5 +1,5 @@
 #define LEDPin 13
-int photoTran = A16;
+int photoTran = 35; //A16
 int reading = 0;
 int trigUSF = 8;
 int echoUSF = 7;
@@ -13,11 +13,15 @@ int dirPinR = 12;
 int coastPinR = 24;
 int coastPinL = 25;
 int coastTrigger = 26;
-bool coastP = false;
+
+bool coastP = true;
 bool dirForward = true;
 //speed can range from 0 - 255
 float wheelSpeed = 255;
 int i;
+
+int lastDist;
+int lastChange;
 
 int ultrasoundF(){
   long duration, distance;
@@ -111,7 +115,7 @@ void loop(){
     if (wheelSpeed == 0) {
       dirForward = true;
       for (i=0; i<10; i++) {
-        accelerate(dirForward);
+        aboutTurn('l');
       }
     } else {
       wheelSpeed = slowDown();
@@ -188,5 +192,59 @@ void setSpd(float val) {
   wheelSpeed = val;
 }
 
+//bool differentiate (char side, bool maximum){
+//  switch (side) {
+//    case 'r':
+//    case 'R':
+//      {
+//        if (lastDist == null) {
+//          lastDist = ultrasoundR();
+//        } else if (lastChange == null ) {
+//          lastChange = ultrasoundR() - lastDist;
+//        } else {
+//          if (maximum) {
+//            return ((ultrasoundR() - lastDist) <= 0 && lastChange >= 0);
+//          } else {
+//            return ((ultrasoundR() - lastDist) >=0 && lastChange <= 0);
+//          }
+//        }
+//      }
+//      break;
+//    case 'l':
+//    case 'L' :
+//      {
+//        if (lastDist == null) {
+//          lastDist = ultrasoundL();
+//        } else if (lastChange == null ) {
+//          lastChange = ultrasoundL() - lastDist;
+//        } else {
+//          if (maximum) {
+//            return ((ultrasoundL() - lastDist) <= 0 && lastChange >= 0);
+//          } else {
+//            return ((ultrasoundL() - lastDist) >=0 && lastChange <= 0);
+//          }
+//        }
+//      }
+//      break;
+//    default: 
+//    break;
+//  } 
+//}
 
+void aboutTurn(char side) {
+  switch (side) {
+    case 'l':
+    case 'L':
+      moveForwardR(130);
+      reverseL(130);
+    break;
+    case 'r':
+    case'R':
+      moveForwardL(130);
+      reverseR(130);
+    break;
+    default: 
+    break;
+  }
+}
 
