@@ -1,34 +1,29 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #define LEDPin 13
-int intF = 36;
-int intB = 37;
-int intL = 38;
-int intR = 39;
-/*
-int pinF = 26;
-int pinB = 25;
-int pinL = 24;
-int pinR = 28;
-*/
+const int intF = 36;
+const int intB = 37;
+const int intL = 38;
+const int intR = 39;
+const int buttonR = 5;
+const int buttonL = 4;
+
 void setup() {
   // put your setup code here, to run once:
   pinMode(intF, INPUT);
   pinMode(intB, INPUT);
   pinMode(intL, INPUT);
   pinMode(intR, INPUT);
-  /*
-  pinMode (pinF,OUTPUT);
-  pinMode (pinB,OUTPUT);
-  pinMode (pinL,OUTPUT);
-  pinMode (pinR,OUTPUT);
-  */
+  pinMode(buttonR, INPUT);
+  pinMode(buttonL, INPUT);
   pinMode (LEDPin,OUTPUT);
   
   attachInterrupt(intF, ISRF, RISING);
   attachInterrupt(intB, ISRB, RISING);
   attachInterrupt(intL, ISRL, RISING);
   attachInterrupt(intR, ISRR, RISING);
+  attachInterrupt(buttonR, ISRbuttonR, RISING);
+  attachInterrupt(buttonL, ISRbuttonL, RISING);
 }
 
 void loop() {
@@ -36,39 +31,29 @@ void loop() {
   
   digitalWrite(LEDPin, HIGH);
   delay(100);
-  //digitalWrite(pinF, HIGH);
-  delay(100);
-  digitalWrite(LEDPin, HIGH);
-  delay(100);
-  //digitalWrite(pinB, HIGH);
-  delay(100);
-  digitalWrite(LEDPin, HIGH);
-  delay(100);
-  //digitalWrite(pinL, HIGH);
-  delay(100);
-  digitalWrite(LEDPin, HIGH);
-  delay(100);
-  //digitalWrite(pinR, HIGH);
-  delay(100);  
 }
 
 void ISRF(){
   digitalWrite(LEDPin, LOW);
-  //digitalWrite(pinF, LOW);
 }
 
 void ISRB(){
   digitalWrite(LEDPin, LOW);
-  //digitalWrite(pinB, LOW);
 }
 
 void ISRL(){
   digitalWrite(LEDPin, LOW);
-  //digitalWrite(pinL, LOW);
 }
 
 void ISRR(){
   digitalWrite(LEDPin, LOW);
-  //digitalWrite(pinR, LOW);
+}
+
+void ISRbuttonR(){
+  digitalWrite(LEDPin, LOW);
+}
+
+void ISRbuttonL(){
+  digitalWrite(LEDPin, LOW);
 }
 
