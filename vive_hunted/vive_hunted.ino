@@ -96,10 +96,10 @@ void loop() {
     yFilt1 = yOld1 * 0.5 + yPos1 * 0.5;
     xOld1 = xFilt1;
     yOld1 = yFilt1;
-    Serial.print("Front: ");
-    Serial.print(xFilt1);
-    Serial.print(" ");
-    Serial.println(yFilt1);
+    //Serial.print("Front: ");
+    //Serial.print(xFilt1);
+    //Serial.print(" ");
+    //Serial.println(yFilt1);
 
     // calculate the position and filter it
     xPos2 = tan((V2.vertAng - 90.0) * DEG_TO_RAD) * LIGHTHOUSEHEIGHT;
@@ -108,10 +108,10 @@ void loop() {
     yFilt2 = yOld2 * 0.5 + yPos2 * 0.5;
     xOld2 = xFilt2;
     yOld2 = yFilt2;
-    Serial.print("Back: ");
-    Serial.print(xFilt2);
-    Serial.print(" ");
-    Serial.println(yFilt2);
+    //Serial.print("Back: ");
+    //Serial.print(xFilt2);
+    //Serial.print(" ");
+    //Serial.println(yFilt2);
 
     // blink the led so you can tell if you are getting sensor data
     digitalWrite(13, state);
@@ -122,6 +122,15 @@ void loop() {
       state = 1;
     }
   }
+  if (xFilt1-xFilt2>0 && yFilt1-yFilt2>0){
+    Serial.println("Front Right");}
+  else if (xFilt1-xFilt2>0 && yFilt1-yFilt2<0){
+    Serial.println("Back Right");}
+  else if (xFilt1-xFilt2<0 && yFilt1-yFilt2>0){
+    Serial.println("Front Left");}
+  else if (xFilt1-xFilt2<0 && yFilt1-yFilt2<0){
+    Serial.println("Back Left");}
+  
 }
 
 // the sensor interrupt
