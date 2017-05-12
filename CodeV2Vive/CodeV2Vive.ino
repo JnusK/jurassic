@@ -8,6 +8,7 @@
 #define V2PIN 8 // the signat from the back sensor
 #define DEG_PER_US 0.0216 // equal to (180 deg) / (8333 us)
 #define LIGHTHOUSEHEIGHT 6.0 // in feet
+#define RFactor 0.8
 
 // structure to store the sensor data
 typedef struct {
@@ -336,7 +337,7 @@ void moveForward (float val) {
 }
 
 void moveForwardR (float val) {
-  analogWrite(pwmPinR, val);
+  analogWrite(pwmPinR, val*RFactor);
   digitalWrite(dirPinR, HIGH);
 }
 
