@@ -1,4 +1,8 @@
+#include <avr/io.h>
+#include <avr/interrupt.h>
+
 #define LEDPin 13
+
 int photoTran = 35; //A16
 int reading = 0;
 int echoUSF = 15;
@@ -23,11 +27,7 @@ int coastTrigger = 23;
 bool coastP = true;
 bool dirForward = true;
 //speed can range from 0 - 255
-float wheelSpeed = 255;
-
-int lastDist = -1;
-int lastChange = -1;
-int prevDistF = -1;
+float wheelSpeed = 200;
 
 int buttonR = 5;
 int buttonL = 4;
@@ -36,8 +36,8 @@ volatile bool evasivep;
 int currDistF, currDistB, currDistR, currDistL, newDistF, newDistB, newDistR, newDistL = 0;
 
 int clearDist = 20;
-int ninetyDegDelay = 500/3;
-int fortyfiveDegDelay = 250/3;
+int ninetyDegDelay = 800;
+int fortyfiveDegDelay = 600;
 
 int ultrasound(int echo, int trig){
   long duration, distance;
@@ -50,10 +50,10 @@ int ultrasound(int echo, int trig){
   duration = pulseIn(echo, HIGH);
   distance = (duration/2)/29.1;
   //distance = (duration/2)/58;
-  if (duration != 0 && distance < 10){
+  if (duration != 0 && distance < 20){
     digitalWrite(LEDPin, LOW);
   }
-//  Serial.println(distance);
+  Serial.println(distance);
   return distance;
 }
 
@@ -85,7 +85,10 @@ void setup(){
 
   pinMode(buttonR, INPUT);
   pinMode(buttonL, INPUT);
+  attachInterrupt(buttonR, buttonRCallback, RISING);
+  attachInterrupt(buttonL, buttonLCallback, RISING);
   randomSeed(analogRead(0));
+
   Serial.begin(9600);
 }
 
@@ -106,8 +109,8 @@ void loop(){
   //normal operation
   newDistF = ultrasound(echoUSF,trigUSF);
   newDistB = ultrasound(echoUSB, trigUSB);
-  newDistR = ultrasound(echoUSR, trigUSR);
-  newDistL = ultrasound(echoUSL, trigUSL);
+//  newDistR = ultrasound(echoUSR, trigUSR);
+//  newDistL = ultrasound(echoUSL, trigUSL);
   if (newDistF != 0 && newDistF < 1000){
     currDistF = newDistF;
   }
@@ -123,7 +126,7 @@ void loop(){
 
 //random movement
 //changes direction after every random motion, including when the bot hits a wall with both sides clear
-  if (random(100) == 88 ) {
+/*  if (random(100) == 88 ) {
     if (lR ==  0){
       if (clearLp) {
         aboutTurnL(ninetyDegDelay);
@@ -137,10 +140,10 @@ void loop(){
     } else {
       aboutTurnL(ninetyDegDelay);
     }
-  }
+  }*/
   
 // detect collision
-  if (currDistF < 20 && currDistF != 0){
+  if (currDistF < 25 && currDistF != 0){
     if (wheelSpeed == 0) {
       if (!clearRp) {
         aboutTurnL(ninetyDegDelay);
@@ -179,16 +182,16 @@ int slowDown(bool dirForward) {
 }
 
 bool clearRp() {
-  return (currDistR > 20);
+  return (currDistR > 15);
 }
 
 bool clearLp() {
-  return (currDistL > 20);
+  return (currDistL > 15);
 }
 
 void accelerate(bool forward) {
-  if (wheelSpeed < 255 ) {
-   wheelSpeed = wheelSpeed + 7;   
+  if (wheelSpeed < 200 ) {
+   wheelSpeed = wheelSpeed + 30;   
   }
   moveWheel(wheelSpeed, forward);
 }
@@ -202,8 +205,8 @@ void moveWheel(float val, bool forward) {
 }
 
 void aboutTurnR (int delaySet){
-  moveForwardL(200);
-  reverseR(200);
+  moveForwardL(125);
+  reverseR(125);
   delay (delaySet);
 }
 
@@ -250,60 +253,35 @@ void setSpd(float val) {
   wheelSpeed = val;
 }
 
-//bool differentiate (char side, bool maximum){
-//  switch (side) {
-//    case 'r':
-//    case 'R':
-//      {
-//        if (lastDist == -1) {
-//          lastDist = ultrasound(echoUSR, trigUSR);
-//        } else if (lastChange == -1 ) {
-//          lastChange = ultrasound(echoUSR, trigUSR) - lastDist;
-//        } else {
-//          if (maximum) {
-//            return ((ultrasound(echoUSR, trigUSR) - lastDist) <= 0 && lastChange >= 0);
-//          } else {
-//            return ((ultrasound(echoUSR, trigUSR) - lastDist) >=0 && lastChange <= 0);
-//          }
-//        }
-//      }
-//      break;
-//    case 'l':
-//    case 'L' :
-//      {
-//        if (lastDist == -1) {
-//          lastDist = ultrasound(echoUSL, trigUSL);
-//        } else if (lastChange == -1 ) {
-//          lastChange = ultrasound(echoUSL, trigUSL) - lastDist;
-//        } else {
-//          if (maximum) {
-//            return ((ultrasound(echoUSL, trigUSL) - lastDist) <= 0 && lastChange >= 0);
-//          } else {
-//            return ((ultrasound(echoUSL, trigUSL) - lastDist) > 0 && lastChange < 0);
-//          }
-//        }
-//      }
-//      break;
-//    default: 
-//    break;
-// } 
-//}
-
 void aboutTurnL(int delaySet) {
-    moveForwardR(200);
-    reverseL(200);
+    moveForwardR(125);
+    reverseL(125);
     delay (delaySet);
 } 
 
 void buttonRCallback () {
-  if (digitalRead(buttonL) == LOW ) {
-    aboutTurnL(fortyfiveDegDelay);
+  if (digitalRead(buttonL) == LOW && digitalRead(buttonR) == HIGH) { 
+    delay(100);
+    if (digitalRead(buttonR) == HIGH) {
+      setSpd(0);
+      delay(100);
+      reverse(100);
+      delay(100);
+      aboutTurnL(fortyfiveDegDelay);
+    }
   }
 }
 
 void buttonLCallback () {
-  if (digitalRead(buttonR) == LOW ) {
-    aboutTurnR(fortyfiveDegDelay);
+  if (digitalRead(buttonR) == LOW && digitalRead(buttonL) == HIGH) {
+    delay(100);
+    if (digitalRead(buttonL) == HIGH) {
+      setSpd(0);
+      delay(100);
+      reverse(100);
+      delay(100);
+      aboutTurnR(fortyfiveDegDelay);
+    }
   }
 }
 
