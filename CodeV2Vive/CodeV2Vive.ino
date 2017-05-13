@@ -8,8 +8,7 @@
 #define V2PIN 8 // the signat from the back sensor
 #define DEG_PER_US 0.0216 // equal to (180 deg) / (8333 us)
 #define LIGHTHOUSEHEIGHT 6.0 // in feet
-#define RFactor 0.8
-#define viveBuf 5
+#define viveBuf 0.1
 
 // structure to store the sensor data
 typedef struct {
@@ -59,6 +58,7 @@ bool coastP = true;
 bool dirForward = true;
 //speed can range from 0 - 255
 float wheelSpeed = 200;
+int RFactor = 0.8;
 
 int buttonR = 5;
 int buttonL = 4;
@@ -72,7 +72,7 @@ int fortyfiveDegDelay = 600;
 int selfCurrPos, oppoCurrPos, safePosition;
 double alignedX, alignedY = -1; 
 int nextSafeSpot = -1;
-bool safeP = true;
+bool safeP, alignXP = true;
 
 int ultrasound(int echo, int trig){
   long duration, distance;
@@ -88,7 +88,7 @@ int ultrasound(int echo, int trig){
   if (duration != 0 && distance < 20){
     digitalWrite(LEDPin, LOW);
   }
-  Serial.println(distance);
+//  Serial.println(distance);
   return distance;
 }
 
@@ -147,6 +147,8 @@ void setup(){
 }
 
 void loop(){
+  Serial.println("hello");
+  /*
   //brake button
   if (digitalRead(coastTrigger)) {
     if (coastP) {
@@ -187,16 +189,20 @@ void loop(){
   if (selfCurrPos == 1) {
     if (safePosition == 11 && nextSafeSpot != 12 && nextSafeSpot != 14) {
       if (oppoCurrPos == 0) {
-        alignedY = xAlign();
+        xAlign();
+        alignedY = 3.7;
         nextSafeSpot = 12;
       } else if (oppoCurrPos == 2) {
-        alignedX = yAlign();
+        yAlign();
+        alignedX = -5.6;
         nextSafeSpot = 14;
       } else if (lR == 0) {
-        alignedY = xAlign();
+        xAlign();
+        alignedY = 3.7;
         nextSafeSpot = 12;
       } else {
-        alignedX = yAlign();
+        yAlign();
+        alignedX = -5.6;
         nextSafeSpot = 14;
       }
       safeP = false;
@@ -204,16 +210,20 @@ void loop(){
   } else if (selfCurrPos == 4) {
     if (safePosition == 13 && nextSafeSpot != 12 && nextSafeSpot != 14) {
       if (oppoCurrPos == 3) {
-          alignedX = yAlign();
+          yAlign();
+          alignedX = 3.6;
           nextSafeSpot = 12;
         } else if (oppoCurrPos == 5) {
-          alignedY = xAlign();
+          xAlign();
+          alignedY = -5.5;
           nextSafeSpot = 14;
         } else if (lR == 0) {
-          alignedY = xAlign();
+          xAlign();
+          alignedY = -5.5;
           nextSafeSpot = 14;
         } else {
-          alignedX = yAlign();
+          yAlign();
+          alignedX = 3.6;
           nextSafeSpot = 12;
         }
         safeP = false;
@@ -227,23 +237,31 @@ void loop(){
       safeP = true;
     } else if (safePosition == 12){
       if (oppoCurrPos == 0 || oppoCurrPos == 1 || oppoCurrPos == 2) {
-        alignedX = yAlign();
+        yAlign();
+        alignedX = 3.6;
         nextSafeSpot = 13;
       } else {
-        alignedY = xAlign();
+        xAlign();
+        alignedY = 3.7;
         nextSafeSpot = 11;
       }
     } else if (safePosition == 14) {
       if (oppoCurrPos == 0 || oppoCurrPos == 1 || oppoCurrPos == 2) {
-        alignedY = xAlign();
+        xAlign();
+        alignedY = -5.3;
         nextSafeSpot = 13;
       } else {
-        alignedX = yAlign();
+        yAlign();
+        alignedX = -5.6;
         nextSafeSpot = 11;
       }
     }
   }
-  
+
+  Serial.print("SafePosition: ");
+  Serial.println(safePosition);
+  Serial.print("Current Region: ");
+  Serial.println(selfCurrPos);
   //detect collision
   if (currDistF < 25 && currDistF != 0){
     if (wheelSpeed == 0) {
@@ -273,7 +291,7 @@ void loop(){
 
   /// Vive and xbee code
 // see if the xbee has sent any data
-  /*if (Serial4.available() > 0) {
+  if (Serial4.available() > 0) {
     msg[msg_index] = Serial4.read();
     // if you get a newline, there is data to read
     if (msg[msg_index] == '\n') {
@@ -292,8 +310,8 @@ void loop(){
         msg_index = 0;
       }
     }
-  }*/
-
+  }
+*/
   // if the sensor data is new
   if (V1.useMe == 1) {
     V1.useMe = 0;
@@ -317,6 +335,7 @@ void loop(){
     yFilt2 = yOld2 * 0.5 + yPos2 * 0.5;
     xOld2 = xFilt2;
     yOld2 = yFilt2;
+    
     Serial.print("Back: ");
     Serial.print(xFilt2);
     Serial.print(" ");
@@ -331,16 +350,9 @@ void loop(){
       state = 1;
     }
   }
-  /*if (xFilt1-xFilt2>0 && yFilt1-yFilt2>0){
-    Serial.println("Front Right");}
-  else if (xFilt1-xFilt2>0 && yFilt1-yFilt2<0){
-    Serial.println("Back Right");}
-  else if (xFilt1-xFilt2<0 && yFilt1-yFilt2>0){
-    Serial.println("Front Left");}
-  else if (xFilt1-xFilt2<0 && yFilt1-yFilt2<0){
-    Serial.println("Back Left");}
-    */
-///end of Vive and xbee code
+//end of Vive and xbee code
+  
+  xAlign();
 }
 
 int slowDown(bool dirForward) {
@@ -372,6 +384,44 @@ void accelerate(bool forward) {
   } else{
     if (wheelSpeed < 200 ) {
       wheelSpeed = wheelSpeed + 30;
+    }
+    if (alignXP) {
+      if (!viveEqual (yFilt1, alignedY)){
+        if (xFilt1 > xFilt2) {
+          if (yFilt1 > alignedY) {
+            RFactor = 0.7;
+          } else {
+            RFactor = 0.9;
+          }
+        } else {
+          if (yFilt1 > alignedY) {
+            RFactor = 0.9;
+          } else {
+            RFactor = 0.7;
+          }
+        }
+      } else {
+        RFactor = 0.8;        
+      }
+    } else {
+      if (!viveEqual (xFilt1, alignedX)){
+        if (yFilt1 > yFilt2) {
+          if (xFilt1 < alignedX) {
+            RFactor = 0.7;
+          } else {
+            RFactor = 0.9;
+          }
+        }
+        if (yFilt1 < yFilt2) {
+          if (xFilt1 < alignedX) {
+            RFactor = 0.9;
+          } else {
+            RFactor = 0.7;
+          }
+        }
+      } else {
+        RFactor = 0.8;
+      }
     }
     moveWheel(wheelSpeed, forward);
   }
@@ -449,6 +499,22 @@ void buttonRCallback () {
       reverse(100);
       delay(100);
       aboutTurnL(fortyfiveDegDelay);
+      if (nextSafeSpot == 11 ) {
+        alignedX = alignedX - 0.1;
+        alignedY = alignedY - 0.1;
+      }
+      if (nextSafeSpot == 12 ) {
+        alignedX = alignedX - 0.1;
+        alignedY = alignedY + 0.1;
+      }
+      if (nextSafeSpot == 13) {
+        alignedX = alignedX + 0.1;
+        alignedY = alignedY + 0.1;
+      }
+      if (nextSafeSpot == 14) {
+        alignedX = alignedX + 0.1;
+        alignedY = alignedY - 0.1;
+      }
     }
   }
 }
@@ -542,18 +608,17 @@ bool viveEqual (double x1, double x2) {
 }
 
 int safeSpot(double x, double y){
-  if ( x < -4) {
-    if ( y < -4) {
-      return 14;
-    } else if ( y > 2.6) {
-      return 11;
-    }
-  } else if ( x > 2.6 ) {
-    if ( y < -4 ){
-      return 13;
-    } else if (y > 2.6) {
-      return 12;
-    }
+  if ( x < -5.6 && y > 3.4) {
+    return 11;
+  }
+  if ( x > 3.2 && y > 3.6) {
+    return 12;
+  }
+  if ( x > 3.7 && y < -4.6) {
+    return 13;
+  }
+  if ( x < -5.3 && y < -5.6) {
+    return 14;
   }
   return 0;
 }
