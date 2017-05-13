@@ -27,6 +27,7 @@ double xPos1, yPos1;
 double xPos2, yPos2;
 double xOld1 = 0, yOld1 = 0, xFilt1 = 0, yFilt1 = 0;
 double xOld2 = 0, yOld2 = 0, xFilt2 = 0, yFilt2 = 0;
+double xNew1 = 0, xNew2 = 0, yNew1 = 0, yNew2 = 0;
 
 // variables for the xbee data
 char msg[100];
@@ -58,7 +59,7 @@ bool coastP = true;
 bool dirForward = true;
 //speed can range from 0 - 255
 float wheelSpeed = 200;
-int RFactor = 0.8;
+float RFactor = 0.8;
 
 int buttonR = 5;
 int buttonL = 4;
@@ -67,12 +68,21 @@ volatile bool evasivep;
 int currDistF, currDistB, currDistR, currDistL, newDistF, newDistB, newDistR, newDistL = 0;
 
 int ninetyDegDelay = 800;
-int fortyfiveDegDelay = 600;
+int fortyfiveDegDelay = 300;
 
 int selfCurrPos, oppoCurrPos, safePosition;
-double alignedX, alignedY = -1; 
+float xNewOpponent, yNewOpponent;
+float xOldOpponent, yOldOpponent;
+
+double alignedX = -1;
+double alignedY = -1; 
 int nextSafeSpot = -1;
-bool safeP, alignXP = true;
+bool safeP = true;
+bool alignXP = true;
+bool aligningXP = false;
+bool aligningYP = false;
+int one = 0, two = 0, three = 0;
+int sentData = 0;
 
 int ultrasound(int echo, int trig){
   long duration, distance;
@@ -124,7 +134,8 @@ void setup(){
   attachInterrupt(buttonL, buttonLCallback, RISING);
   randomSeed(analogRead(0));
 
-  Serial4.begin(9600); // to listen to the xbee
+  Serial.begin(9600);
+  Serial3.begin(9600);
   pinMode(13, OUTPUT); // to blink the led on pin 13
   pinMode(V1PIN, INPUT); // to read the front sensor
   pinMode(V2PIN, INPUT); // to read the back sensor
@@ -142,29 +153,16 @@ void setup(){
   // interrupt on any sensor change
   attachInterrupt(digitalPinToInterrupt(V1PIN), ISRV1, CHANGE);
   attachInterrupt(digitalPinToInterrupt(V2PIN), ISRV2, CHANGE);
-  
-  Serial.begin(9600);
+  aligningXP = true;
 }
 
 void loop(){
-  Serial.println("hello");
-  /*
-  //brake button
-  if (digitalRead(coastTrigger)) {
-    if (coastP) {
-      setSpd(0);
-      digitalWrite(coastPinR, LOW);
-      digitalWrite(coastPinL, LOW);
-      coastP = false;
-    } else {
-      stopMove();
-    }
-    delay(100);
-  }
 
-  //normal operation
   //data collection
   newDistF = ultrasound(echoUSF,trigUSF);
+  if (newDistF != 0 && newDistF < 1000){
+    currDistF = newDistF;
+  }
   newDistB = ultrasound(echoUSB, trigUSB);
   newDistR = ultrasound(echoUSR, trigUSR);
   newDistL = ultrasound(echoUSL, trigUSL);
@@ -180,11 +178,46 @@ void loop(){
     if (newDistL != 0 && newDistL < 1000){
     currDistL = newDistL;
   }
+  
+//  
+  while (!sentData){
+  if (Serial3.available() > 0) {
+    msg[msg_index] = Serial3.read();
+    // if you get a newline, there is data to read
+    if (msg[msg_index] == '\n') {
+      msg_index = 0;
+      // data is in the format of two floats seperated by spaces
+      sscanf(msg, "%f %f", &xOpponent, &yOpponent);
 
+//      Serial.print("op: ");
+//      Serial.print(xOpponent);
+//      Serial.print(" ");
+//      Serial.println(yOpponent);
+      sentData = 1;
+    }
+    else {
+      // did not get a newline yet, just store for later
+      msg_index++;
+      if (msg_index == 100) {
+        msg_index = 0;
+      }
+    }
+  }
+  }
+  sentData = 0;
   //mapping
   selfCurrPos = currRegion( xFilt1, yFilt1); 
-//  oppoCurrPos = currRegion( xOpponent, yOpponent);
-  oppoCurrPos = 0;
+  if (xOpponent > -10 && xOpponent < 10 && yOpponent > -10 && yOpponent < 10){
+    xNewOpponent = 0.5*xOldOpponent + 0.5*xOpponent;
+    yNewOpponent = 0.5*yOldOpponent + 0.5*yOpponent;
+  }
+  xOldOpponent = xNewOpponent;
+  yOldOpponent = yNewOpponent;
+//  Serial.print("op: ");
+//  Serial.print(xNewOpponent);
+//  Serial.print(" ");
+//  Serial.println(yNewOpponent);
+  oppoCurrPos = currRegion ( xNewOpponent, yNewOpponent);
   safePosition = safeSpot (xFilt1, yFilt1);
   if (selfCurrPos == 1) {
     if (safePosition == 11 && nextSafeSpot != 12 && nextSafeSpot != 14) {
@@ -192,50 +225,64 @@ void loop(){
         xAlign();
         alignedY = 3.7;
         nextSafeSpot = 12;
+        safeP = false;
       } else if (oppoCurrPos == 2) {
         yAlign();
         alignedX = -5.6;
         nextSafeSpot = 14;
-      } else if (lR == 0) {
-        xAlign();
-        alignedY = 3.7;
-        nextSafeSpot = 12;
-      } else {
-        yAlign();
-        alignedX = -5.6;
-        nextSafeSpot = 14;
+        safeP = false;
+      } else if (oppoCurrPos == 1) {
+        if (lR == 0) {
+          xAlign();
+          alignedY = 3.7;
+          nextSafeSpot = 12;
+          } else {
+            yAlign();
+            alignedX = -5.6;
+            nextSafeSpot = 14;
+          }
+          safeP = false;
+        } else {
+          safeP = true;
+          nextSafeSpot = 11;
+          setSpd(0);
+        }
       }
-      safeP = false;
-    }
   } else if (selfCurrPos == 4) {
     if (safePosition == 13 && nextSafeSpot != 12 && nextSafeSpot != 14) {
       if (oppoCurrPos == 3) {
           yAlign();
           alignedX = 3.6;
           nextSafeSpot = 12;
+          safeP = false;
         } else if (oppoCurrPos == 5) {
           xAlign();
           alignedY = -5.5;
           nextSafeSpot = 14;
-        } else if (lR == 0) {
-          xAlign();
-          alignedY = -5.5;
-          nextSafeSpot = 14;
+          safeP = false;
+        } else if (oppoCurrPos == 4 ) {
+          if (lR == 0) {
+            xAlign();
+            alignedY = -5.5;
+            nextSafeSpot = 14;
+          } else {
+            yAlign();
+            alignedX = 3.6;
+            nextSafeSpot = 12;
+          }
+          safeP = false;
         } else {
-          yAlign();
-          alignedX = 3.6;
-          nextSafeSpot = 12;
+          safeP = true;
+          nextSafeSpot = 13;
+          setSpd(0);
         }
-        safeP = false;
     }
   }
-
+  
   //State Machine
   if (safePosition == nextSafeSpot) {
     //find out where is enemy to determine new safespot or stay
-    if (safePosition == 11 || safePosition == 13 ) {
-      safeP = true;
-    } else if (safePosition == 12){
+    if (safePosition == 12){
       if (oppoCurrPos == 0 || oppoCurrPos == 1 || oppoCurrPos == 2) {
         yAlign();
         alignedX = 3.6;
@@ -257,61 +304,19 @@ void loop(){
       }
     }
   }
-
   Serial.print("SafePosition: ");
   Serial.println(safePosition);
   Serial.print("Current Region: ");
   Serial.println(selfCurrPos);
-  //detect collision
-  if (currDistF < 25 && currDistF != 0){
-    if (wheelSpeed == 0) {
-      if (!clearRp) {
-        aboutTurnL(ninetyDegDelay);
-      } else if (!clearLp) {
-        aboutTurnR(ninetyDegDelay);
-      } else {
-        lR = random(300) % 2;
-        if (lR == 0) {
-          aboutTurnL(ninetyDegDelay);
-        } else {
-          aboutTurnR(ninetyDegDelay);
-        }
-      }
-    } else {
-      wheelSpeed = slowDown(dirForward);
-    }
-  } else {
-    if (safeP) {
-      setSpd(0);
-    } else {
-      accelerate(dirForward);
-    }
-  }
-  delay(100);
+  Serial.print("Oppo Region: ");
+  Serial.println(oppoCurrPos);
+  Serial.print("Next Safe : ");
+  Serial.println(nextSafeSpot);
+  Serial.print("safe? : ");
+  Serial.println(safeP);
 
-  /// Vive and xbee code
-// see if the xbee has sent any data
-  if (Serial4.available() > 0) {
-    msg[msg_index] = Serial4.read();
-    // if you get a newline, there is data to read
-    if (msg[msg_index] == '\n') {
-      msg_index = 0;
-      // data is in the format of two floats seperated by spaces
-      sscanf(msg, "%f %f", &xOpponent, &yOpponent);
-      Serial.print("op: ");
-      Serial.print(xOpponent);
-      Serial.print(" ");
-      Serial.println(yOpponent);
-    }
-    else {
-      // did not get a newline yet, just store for later
-      msg_index++;
-      if (msg_index == 100) {
-        msg_index = 0;
-      }
-    }
-  }
-*/
+   /// Vive and xbee code
+
   // if the sensor data is new
   if (V1.useMe == 1) {
     V1.useMe = 0;
@@ -319,40 +324,86 @@ void loop(){
     // calculate the position and filter it
     xPos1 = tan((V1.vertAng - 90.0) * DEG_TO_RAD) * LIGHTHOUSEHEIGHT;
     yPos1 = tan((V1.horzAng - 90.0) * DEG_TO_RAD) * LIGHTHOUSEHEIGHT;
-    xFilt1 = xOld1 * 0.5 + xPos1 * 0.5;
-    yFilt1 = yOld1 * 0.5 + yPos1 * 0.5;
+    xNew1 = xOld1 * 0.5 + xPos1 * 0.5;
+    if (xNew1 < 10 && xNew1 > -10){
+      xFilt1 = xNew1;
+    }
+    yNew1 = yOld1 * 0.5 + yPos1 * 0.5;
+    if (yNew1 < 10 && yNew1 > -10) {
+      yFilt1 = yNew1;
+    }
     xOld1 = xFilt1;
     yOld1 = yFilt1;
-    Serial.print("Front: ");
+    /*Serial.print("Front: ");
     Serial.print(xFilt1);
     Serial.print(" ");
-    Serial.println(yFilt1);
+    Serial.println(yFilt1);*/
 
     // calculate the position and filter it
     xPos2 = tan((V2.vertAng - 90.0) * DEG_TO_RAD) * LIGHTHOUSEHEIGHT;
     yPos2 = tan((V2.horzAng - 90.0) * DEG_TO_RAD) * LIGHTHOUSEHEIGHT;
-    xFilt2 = xOld2 * 0.5 + xPos2 * 0.5;
-    yFilt2 = yOld2 * 0.5 + yPos2 * 0.5;
+     xNew2 = xOld2 * 0.5 + xPos2 * 0.5;
+    if (xNew2 < 10 && xNew2 > -10){
+      xFilt2 = xNew2;
+    }
+    yNew2 = yOld2 * 0.5 + yPos2 * 0.5;
+    if (yNew2 < 10 && yNew2 > -10) {
+      yFilt2 = yNew2;
+    }
     xOld2 = xFilt2;
     yOld2 = yFilt2;
     
-    Serial.print("Back: ");
+    /*Serial.print("Back: ");
     Serial.print(xFilt2);
     Serial.print(" ");
     Serial.println(yFilt2);
-
-    // blink the led so you can tell if you are getting sensor data
-    digitalWrite(13, state);
-    if (state == 1) {
-      state = 0;
-    }
-    else {
-      state = 1;
-    }
+    */
   }
 //end of Vive and xbee code
+
+  //detect collision
+  //this code MUST be the last block, it contaoins end condition
   
-  xAlign();
+  if (currDistF < 15 && currDistF != 0){
+      if (wheelSpeed == 0) {
+        if (!clearRp) {
+          aboutTurnL(ninetyDegDelay);
+        } else if (!clearLp) {
+          aboutTurnR(ninetyDegDelay);
+        } else {
+          lR = random(300) % 2;
+          if (lR == 0) {
+            aboutTurnL(ninetyDegDelay);
+          } else {
+            aboutTurnR(ninetyDegDelay);
+          }
+        }
+      } else {
+        wheelSpeed = slowDown(dirForward);
+      }
+    }
+    else {
+    if (aligningXP) {
+      xAlign(); 
+    } else if (aligningYP) {
+      yAlign();
+    } else if (safeP) {
+      if (!viveEqual(yFilt1, yFilt2)) {
+        xAlign();
+      } else {
+        setSpd(0);
+      }
+    } else {
+      Serial.print("AlignedX: ");
+      Serial.print(alignedX);
+      Serial.println(xFilt1);
+      Serial.print("AlignedY: ");
+      Serial.print(alignedY);
+      Serial.print(yFilt1);
+      accelerate(dirForward);
+    }
+  }
+  delay(100);
 }
 
 int slowDown(bool dirForward) {
@@ -389,15 +440,15 @@ void accelerate(bool forward) {
       if (!viveEqual (yFilt1, alignedY)){
         if (xFilt1 > xFilt2) {
           if (yFilt1 > alignedY) {
-            RFactor = 0.7;
+            RFactor = 0.65;
           } else {
-            RFactor = 0.9;
+            RFactor = 0.95;
           }
         } else {
           if (yFilt1 > alignedY) {
-            RFactor = 0.9;
+            RFactor = 0.95;
           } else {
-            RFactor = 0.7;
+            RFactor = 0.65;
           }
         }
       } else {
@@ -407,16 +458,16 @@ void accelerate(bool forward) {
       if (!viveEqual (xFilt1, alignedX)){
         if (yFilt1 > yFilt2) {
           if (xFilt1 < alignedX) {
-            RFactor = 0.7;
+            RFactor = 0.65;
           } else {
-            RFactor = 0.9;
+            RFactor = 0.95;
           }
         }
         if (yFilt1 < yFilt2) {
           if (xFilt1 < alignedX) {
-            RFactor = 0.9;
+            RFactor = 0.95;
           } else {
-            RFactor = 0.7;
+            RFactor = 0.65;
           }
         }
       } else {
@@ -430,7 +481,7 @@ void accelerate(bool forward) {
 void moveWheel(float val, bool forward) {
   if (forward) {
     moveForward(val);
-  } else {
+  } else { 
     reverse(val);
   }
 }
@@ -497,24 +548,8 @@ void buttonRCallback () {
       setSpd(0);
       delay(100);
       reverse(100);
-      delay(100);
+      delay(500);
       aboutTurnL(fortyfiveDegDelay);
-      if (nextSafeSpot == 11 ) {
-        alignedX = alignedX - 0.1;
-        alignedY = alignedY - 0.1;
-      }
-      if (nextSafeSpot == 12 ) {
-        alignedX = alignedX - 0.1;
-        alignedY = alignedY + 0.1;
-      }
-      if (nextSafeSpot == 13) {
-        alignedX = alignedX + 0.1;
-        alignedY = alignedY + 0.1;
-      }
-      if (nextSafeSpot == 14) {
-        alignedX = alignedX + 0.1;
-        alignedY = alignedY - 0.1;
-      }
     }
   }
 }
@@ -526,7 +561,7 @@ void buttonLCallback () {
       setSpd(0);
       delay(100);
       reverse(100);
-      delay(100);
+      delay(500);
       aboutTurnR(fortyfiveDegDelay);
     }
   }
@@ -557,48 +592,49 @@ int currRegion ( double x, double y) {
 
 //align to x-axis
 double xAlign () {
-  while(!viveEqual(yFilt1, yFilt2)){
-     if (xFilt1 < 0 && xFilt2 < 0) {
-      if(yFilt1 > yFilt2) {
-        moveForwardL(100);
-        reverseR(100);
-      } else {
-        moveForwardR(100);
-        reverseL(100);
-      }
-     } else {
-      if (yFilt1 > yFilt2) {
-        moveForwardR(100);
-        reverseL(100);
-      } else {
-        moveForwardL(100);
-        reverseR(100);
-      }
-     }
+  aligningXP = !viveEqual (yFilt1, yFilt2);
+  if (xFilt1 < 0 && xFilt2 < 0) {
+   if(yFilt1 > yFilt2) {
+     moveForwardL(100);
+     reverseR(100);
+   } else {
+     moveForwardR(100);
+     reverseL(100);
+   }
+  } else {
+   if (yFilt1 > yFilt2) {
+     moveForwardR(100);
+     reverseL(100);
+   } else {
+     moveForwardL(100);
+     reverseR(100);
+   }
   }
+  alignXP = true;
   return yFilt1;
 }
 
 double yAlign () {
-  while(!viveEqual(xFilt1, xFilt2)){
-     if (yFilt1 < 0 && yFilt2 < 0) {
-      if(xFilt1 < xFilt2) {
-        moveForwardL(100);
-        reverseR(100);
-      } else {
-        moveForwardR(100);
-        reverseL(100);
-      }
-     } else {
-      if (xFilt1 < xFilt2) {
-        moveForwardR(100);
-        reverseL(100);
-      } else {
-        moveForwardL(100);
-        reverseR(100);
-      }
-     }
+ aligningYP = !viveEqual (xFilt1, xFilt2 );
+ if (yFilt1 < 0 && yFilt2 < 0) {
+  if(xFilt1 < xFilt2) {
+    moveForwardL(100);
+    reverseR(100);
+  } else {
+    moveForwardR(100);
+    reverseL(100);
   }
+ } else {
+  if (xFilt1 < xFilt2) {
+    moveForwardR(100);
+    reverseL(100);
+  } else {
+    moveForwardL(100);
+    reverseR(100);
+  }
+ }
+ 
+  alignXP = false;
   return xFilt1;
 }
 
@@ -608,16 +644,16 @@ bool viveEqual (double x1, double x2) {
 }
 
 int safeSpot(double x, double y){
-  if ( x < -5.6 && y > 3.4) {
+  if ( x < -5.2 && y > 3.3) {
     return 11;
   }
-  if ( x > 3.2 && y > 3.6) {
+  if ( x > 3.1 && y > 3.5) {
     return 12;
   }
-  if ( x > 3.7 && y < -4.6) {
+  if ( x > 3.3 && y < -4.5) {
     return 13;
   }
-  if ( x < -5.3 && y < -5.6) {
+  if ( x < -5.2 && y < -5.5) {
     return 14;
   }
   return 0;
