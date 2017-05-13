@@ -9,6 +9,7 @@
 #define DEG_PER_US 0.0216 // equal to (180 deg) / (8333 us)
 #define LIGHTHOUSEHEIGHT 6.0 // in feet
 #define RFactor 0.8
+#define viveBuf 5
 
 // structure to store the sensor data
 typedef struct {
@@ -65,9 +66,13 @@ volatile bool evasivep;
 
 int currDistF, currDistB, currDistR, currDistL, newDistF, newDistB, newDistR, newDistL = 0;
 
-int clearDist = 20;
 int ninetyDegDelay = 800;
 int fortyfiveDegDelay = 600;
+
+int selfCurrPos, oppoCurrPos, safePosition;
+double alignedX, alignedY = -1; 
+int nextSafeSpot = -1;
+bool safeP = true;
 
 int ultrasound(int echo, int trig){
   long duration, distance;
@@ -156,6 +161,7 @@ void loop(){
   }
 
   //normal operation
+  //data collection
   newDistF = ultrasound(echoUSF,trigUSF);
   newDistB = ultrasound(echoUSB, trigUSB);
   newDistR = ultrasound(echoUSR, trigUSR);
@@ -173,26 +179,72 @@ void loop(){
     currDistL = newDistL;
   }
 
-
-//random movement
-//changes direction after every random motion, including when the bot hits a wall with both sides clear
-/*  if (random(100) == 88 ) {
-    if (lR ==  0){
-      if (clearLp) {
-        aboutTurnL(ninetyDegDelay);
-        lR = 1;
-      } else if (clearRp) {
-        aboutTurnR(ninetyDegDelay);
+  //mapping
+  selfCurrPos = currRegion( xFilt1, yFilt1); 
+//  oppoCurrPos = currRegion( xOpponent, yOpponent);
+  oppoCurrPos = 0;
+  safePosition = safeSpot (xFilt1, yFilt1);
+  if (selfCurrPos == 1) {
+    if (safePosition == 11 && nextSafeSpot != 12 && nextSafeSpot != 14) {
+      if (oppoCurrPos == 0) {
+        alignedY = xAlign();
+        nextSafeSpot = 12;
+      } else if (oppoCurrPos == 2) {
+        alignedX = yAlign();
+        nextSafeSpot = 14;
+      } else if (lR == 0) {
+        alignedY = xAlign();
+        nextSafeSpot = 12;
+      } else {
+        alignedX = yAlign();
+        nextSafeSpot = 14;
       }
-    } else if (clearRp) {
-      aboutTurnR(ninetyDegDelay);
-      lR = 0;
-    } else {
-      aboutTurnL(ninetyDegDelay);
+      safeP = false;
     }
-  }*/
+  } else if (selfCurrPos == 4) {
+    if (safePosition == 13 && nextSafeSpot != 12 && nextSafeSpot != 14) {
+      if (oppoCurrPos == 3) {
+          alignedX = yAlign();
+          nextSafeSpot = 12;
+        } else if (oppoCurrPos == 5) {
+          alignedY = xAlign();
+          nextSafeSpot = 14;
+        } else if (lR == 0) {
+          alignedY = xAlign();
+          nextSafeSpot = 14;
+        } else {
+          alignedX = yAlign();
+          nextSafeSpot = 12;
+        }
+        safeP = false;
+    }
+  }
+
+  //State Machine
+  if (safePosition == nextSafeSpot) {
+    //find out where is enemy to determine new safespot or stay
+    if (safePosition == 11 || safePosition == 13 ) {
+      safeP = true;
+    } else if (safePosition == 12){
+      if (oppoCurrPos == 0 || oppoCurrPos == 1 || oppoCurrPos == 2) {
+        alignedX = yAlign();
+        nextSafeSpot = 13;
+      } else {
+        alignedY = xAlign();
+        nextSafeSpot = 11;
+      }
+    } else if (safePosition == 14) {
+      if (oppoCurrPos == 0 || oppoCurrPos == 1 || oppoCurrPos == 2) {
+        alignedY = xAlign();
+        nextSafeSpot = 13;
+      } else {
+        alignedX = yAlign();
+        nextSafeSpot = 11;
+      }
+    }
+  }
   
-// detect collision
+  //detect collision
   if (currDistF < 25 && currDistF != 0){
     if (wheelSpeed == 0) {
       if (!clearRp) {
@@ -211,7 +263,11 @@ void loop(){
       wheelSpeed = slowDown(dirForward);
     }
   } else {
-    accelerate(dirForward);
+    if (safeP) {
+      setSpd(0);
+    } else {
+      accelerate(dirForward);
+    }
   }
   delay(100);
 
@@ -311,10 +367,14 @@ bool clearLp() {
 }
 
 void accelerate(bool forward) {
-  if (wheelSpeed < 200 ) {
-   wheelSpeed = wheelSpeed + 30;   
+  if (safeP) {
+    setSpd(0);
+  } else{
+    if (wheelSpeed < 200 ) {
+      wheelSpeed = wheelSpeed + 30;
+    }
+    moveWheel(wheelSpeed, forward);
   }
-  moveWheel(wheelSpeed, forward);
 }
 
 void moveWheel(float val, bool forward) {
@@ -369,7 +429,7 @@ void reverse(float val) {
 }
 
 void setSpd(float val) {
-  analogWrite(pwmPinR, val);
+  analogWrite(pwmPinR, val*RFactor);
   analogWrite(pwmPinL, val);
   wheelSpeed = val;
 }
@@ -406,7 +466,97 @@ void buttonLCallback () {
   }
 }
 
+int currRegion ( double x, double y) {
+  if ( y > x ) {
+    if ( x < 0 && y < 0) {
+      return 0;
+    }
+    else if ( x > 0 && y > 0) {
+      return 2;
+    } else {
+      return 1;
+    }
+  }
+  else {
+    if ( x < 0 && y < 0) {
+      return 3;
+    }
+    else if ( x > 0 && y > 0) {
+      return 5;
+    } else {
+      return 4;
+    }
+  }
+}
 
+//align to x-axis
+double xAlign () {
+  while(!viveEqual(yFilt1, yFilt2)){
+     if (xFilt1 < 0 && xFilt2 < 0) {
+      if(yFilt1 > yFilt2) {
+        moveForwardL(100);
+        reverseR(100);
+      } else {
+        moveForwardR(100);
+        reverseL(100);
+      }
+     } else {
+      if (yFilt1 > yFilt2) {
+        moveForwardR(100);
+        reverseL(100);
+      } else {
+        moveForwardL(100);
+        reverseR(100);
+      }
+     }
+  }
+  return yFilt1;
+}
+
+double yAlign () {
+  while(!viveEqual(xFilt1, xFilt2)){
+     if (yFilt1 < 0 && yFilt2 < 0) {
+      if(xFilt1 < xFilt2) {
+        moveForwardL(100);
+        reverseR(100);
+      } else {
+        moveForwardR(100);
+        reverseL(100);
+      }
+     } else {
+      if (xFilt1 < xFilt2) {
+        moveForwardR(100);
+        reverseL(100);
+      } else {
+        moveForwardL(100);
+        reverseR(100);
+      }
+     }
+  }
+  return xFilt1;
+}
+
+
+bool viveEqual (double x1, double x2) {
+  return ( x1 < (x2 + viveBuf) && x1 > (x2 - viveBuf));
+}
+
+int safeSpot(double x, double y){
+  if ( x < -4) {
+    if ( y < -4) {
+      return 14;
+    } else if ( y > 2.6) {
+      return 11;
+    }
+  } else if ( x > 2.6 ) {
+    if ( y < -4 ){
+      return 13;
+    } else if (y > 2.6) {
+      return 12;
+    }
+  }
+  return 0;
+}
 
 // the sensor interrupt
 void ISRV1() {
